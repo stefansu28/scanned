@@ -58,7 +58,7 @@ void scan(FILE *output, ScanState *state, SystemDesc *system, float scanFreq, fl
     buffer = (float *) malloc(sizeof(float) * numSamples);
 
     for (int i = 0; i < numSamples; i++) {
-        int index = (int) (i* scanFreq / (state->size) / SAMPLE_RATE) % state->size;
+        int index = (int) (i* scanFreq * (state->size) / SAMPLE_RATE) % state->size;
         buffer[i] = state->position[index];
 
         // update the system
