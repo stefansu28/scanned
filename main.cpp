@@ -4,7 +4,13 @@
 #define PI 3.14159265
 #define SAMPLE_RATE 44100
 
-void pulse(FILE *file, int note, float duration) {
+
+// output a sine wave
+// file - the raw output file to write the wave to
+// note - the note to generate 0 being C4, 1 being D4, etc
+// duration - the duration of the note in seconds
+// volume - 0 being completely silent, 1 being full volume
+void pulse(FILE *file, int note, float duration, float volume) {
     // convert the note to a frequency
     // 0 is C4
     // 440 is A4
@@ -14,7 +20,7 @@ void pulse(FILE *file, int note, float duration) {
     int numSamples = (int) (duration * SAMPLE_RATE);
     buffer = (float *) malloc(sizeof(float) * numSamples);
     for (int i = 0; i < numSamples; i++) {
-        buffer[i] = sin(freq*(2*PI) * i / SAMPLE_RATE);
+        buffer[i] = sin(freq*(2*PI) * i / SAMPLE_RATE) * volume;
         // printf("%f\n", buffer[i]);
     }
 
@@ -37,7 +43,7 @@ int main(int argc, const char **argv) {
     };
 
     for (int n = 0; n < sizeof(notes)/sizeof(int); n++) {
-        pulse(output, notes[n], .5);
+        pulse(output, notes[n], .25, .5);
     }
 
     fclose(output);
