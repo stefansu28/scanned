@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <cmath>
 
-#define PI 3.14159265
+#include <stdlib.h>
+#include <time.h>
+
+#define PI 3.14159265f
 #define SAMPLE_RATE 44100
 
 
@@ -49,40 +52,50 @@ struct ScanState {
 // state - the initial state of the system, this will be modified!!!
 // system - contains system constants
 // scanFreq - how fast to scan through the state, this is the perceived pitch
-// updateRate - this is the step size (in seconds) of the dynamic system, ie how fast the sound changes timbre and dies out
+// updateRate - this is how much to update the system each iteration (in seconds) of the dynamic system, ie how fast the sound changes timbre and dies out
+// updateSize - this is how small each step is (in seconds)
 // duration - the duration of the note in seconds
 // TODO volume - 0 being completely silent, 1 being full volume. Essentially scales the system
-void scan(FILE *output, ScanState *state, SystemDesc *system, float scanFreq, float updateRate, float duration) {
+void scan(FILE *output, ScanState *state, SystemDesc *system, float scanFreq, float updateRate, float updateSize, float duration) {
     int numSamples = (int) (duration * SAMPLE_RATE);
     float *buffer = NULL;
     buffer = (float *) malloc(sizeof(float) * numSamples);
 
     for (int i = 0; i < numSamples; i++) {
-        int index = (int) (i* scanFreq * (state->size) / SAMPLE_RATE) % state->size;
+        // scan the system
+        // period * frequency * time
+        auto scanPos = state->size * scanFreq * ((float) i / SAMPLE_RATE);
+        int index = ((int) scanPos) % state->size;
         buffer[i] = state->position[index];
 
         // update the system
+        // TODO move to integration function
         for (int j = 0; j < state->size; j++) {
-            // get neighbor positions
-            // TODO should probably make a copy of the original state and use that to be more accurate
-            // TODO should allow the ability to take into account all other points
-            float prev = state->position[j > 0 ? j - 1 : state->size - 1];
-            float next = state->position[j < state->size - 1 ? j + 1 : 0];
+            float elapsed = 0;
+            while(elapsed < updateRate) {
+                // get neighbor positions
+                // TODO should probably make a copy of the original state and use that to be more accurate
+                // TODO should allow the ability to take into account all other points
+                float prev = state->position[j > 0 ? j - 1 : state->size - 1];
+                float next = state->position[j < state->size - 1 ? j + 1 : 0];
 
-            // Use hookes law with dampening:  F = -kx + bv
-            // Distance from equalibrium
-            // TODO maybe make this weighted sum
-            float deltaX = (prev + next) / 2 - state->position[j];
+                // Use hookes law with dampening:  F = -kx + bv
+                // Distance from equalibrium
+                // TODO maybe make this weighted sum, add 0 for centering force note "/ 4"
+                float deltaX = (prev + next + 0) / 3 - state->position[j];
 
-            // TODO take "k" as parameter of the system, one for each point mass
-            // TODO take dampening "b" as parameter of system, one for each point mass
-            // TODO maybe also take mass but might not matter, for now just take force to be the acceleration (m = 1)
-            float force = system->k * deltaX - system->b * state->velocity[j];
+                // TODO take "k" as parameter of the system, one for each point mass
+                // TODO take dampening "b" as parameter of system, one for each point mass
+                // TODO maybe also take mass but might not matter, for now just take force to be the acceleration (m = 1)
+                float force = system->k * deltaX - system->b * state->velocity[j];
 
 
-            // TODO make updates use a better form of integration
-            state->velocity[j] += force * updateRate;
-            state->position[j] += state->velocity[j] * updateRate;
+                // TODO make updates use a better form of integration
+                state->velocity[j] += force * updateSize;
+                state->position[j] += state->velocity[j] * updateSize;
+
+                elapsed += updateSize;
+            }
         }
     }
 
@@ -98,20 +111,8 @@ int main(int argc, const char **argv) {
         return 1;
     }
 
-    // int notes[] = {
-    //     0, 2, 4, 5, 7, 9, 11, 12
-    // };
-
-    // for (int n = 0; n < sizeof(notes)/sizeof(int); n++) {
-    //     pulse(output, notes[n], .25, .5);
-    // }
-
-    SystemDesc system = {1, .01};
-
-    ScanState state;
-    state.size = 2^8;
-    state.position = (float*) malloc(sizeof(float) * state.size);
-    state.velocity = (float*) malloc(sizeof(float) * state.size);
+    // seed the random generator
+    srand(time(NULL));
 
     // C major scale
     // int notes[] = {
@@ -127,17 +128,37 @@ int main(int argc, const char **argv) {
         0, 0, 5, 5, 1, 1, 0, 0
     };
 
+    // for (int n = 0; n < sizeof(notes)/sizeof(int); n++) {
+    //     pulse(output, notes[n], 2, .5);
+    // }
+
+    // return 0;
+
+    SystemDesc system = {.8, .01};
+
+    ScanState state;
+    state.size = 2^7;
+    state.position = (float*) malloc(sizeof(float) * state.size);
+    state.velocity = (float*) malloc(sizeof(float) * state.size);
+
+    const float randOffsetRang = 0.f;
+    const float randVelRang = 0.f;
+
     for (int times = 0; times < 5; times++) {
-        for (int n = 0; n < sizeof(notes)/sizeof(int); n++) {
-            auto note = notes[n] + 12;
-            system.k = 1 + 1*(n%2);
+        for (unsigned int n = 0; n < sizeof(notes)/sizeof(int); n++) {
+            auto note = notes[n];
+            system.k = .6 + .2*((n + 1)%2);
             // initialize the state
             for (int i = 0; i < state.size; i++) {
+                // add a little randomness
+                float randOffset = rand()/((float)RAND_MAX) * randOffsetRang - (randOffsetRang/2.f);
                 // just going to make it a giant sine wave for now
-                state.position[i] = sin(2*PI*i/((float) (state.size))) * 1;
+                float amplitude = .1 + .5 * ((n+1) %2);
+                state.position[i] = sin(2*PI*i/state.size/4) * amplitude + randOffset;
                 // initialize to it being still
-                state.velocity[i] = 0;
+                state.velocity[i] = rand()/((float)RAND_MAX) * randVelRang - (randVelRang/2.f);
             }
+
             // if (times == 0 && n == 0) {
             //     auto index = 0;
             //     int samples = 20;
@@ -149,7 +170,7 @@ int main(int argc, const char **argv) {
 
             float freq = 440 * exp2((float)(note + 3) /12);
             // do the thing!!!
-            scan(output, &state, &system, freq, .005, 2);
+            scan(output, &state, &system, freq, .008*2, .004, 1);
         }
     }
 
