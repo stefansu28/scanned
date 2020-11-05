@@ -1,0 +1,22 @@
+#+TITLE: Scanned Synthesis
+
+* Tasks
+
+** TODO move scanned synthesis to its own file
+This will probably require a makefile
+
+** TODO update scanned system
+**** DONE include the updateRate and updateSize/updateStep
+**** TODO dampening per point mass
+
+** TODO allow for more customizeable scanners
+maybe just do "adjacency" matrix or allow custom functions which take the state positions and the frequency as parameters
+
+** TODO note data structure
+This should allow for easier composition
+should include the note to play, for how long, and the amplitude/velocity
+could even have scanned system parameters
+
+** TODO music utils file
+put things like converting notes to frequencies
+and scales and maybe the sample rate into its own file
